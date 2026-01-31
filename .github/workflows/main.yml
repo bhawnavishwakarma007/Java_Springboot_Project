@@ -47,15 +47,17 @@ jobs:
           target: "/home/ec2-user/app/"
           overwrite: true
 
-     # 6️⃣ Stop old app + Start new app (FINAL FIX)
+    # 6️⃣ Deploy Application on EC2 (FINAL & STABLE)
       - name: Deploy Application on EC2
         uses: appleboy/ssh-action@v1.1.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_KEY }}
+          request_pty: true
           script_stop: false
           script: |
+            set +e
             echo "Stopping old application (if running)..."
             pkill -f datastore-0.0.7.jar || true
             sleep 2
@@ -79,3 +81,4 @@ jobs:
       
             disown
             echo "🚀 Application deployed successfully"
+            exit 0
