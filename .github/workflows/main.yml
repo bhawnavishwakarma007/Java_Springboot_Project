@@ -47,8 +47,8 @@ jobs:
           target: "/home/ec2-user/app/"
           overwrite: true
 
-     # 6️⃣ Stop Old Application (SAFE & FINAL)
-      - name: Stop Old Application
+     # 6️⃣ Stop old app + Start new app (FINAL FIX)
+      - name: Deploy Application on EC2
         uses: appleboy/ssh-action@v1.1.0
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -56,26 +56,16 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script_stop: false
           script: |
-            echo "Stopping existing application (if any)..."
+            echo "Stopping old application (if running)..."
             pkill -f datastore-0.0.7.jar || true
             sleep 2
-            echo "Old application stopped"
-
-
-
-      # 7️⃣ Run New Application
-      - name: Run Application on EC2
-        uses: appleboy/ssh-action@v1.1.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_KEY }}
-          script: |
+      
+            echo "Starting new application..."
             mkdir -p /var/log/app
             chmod 777 /var/log/app
-
+      
             cd /home/ec2-user/app
-
+      
             nohup env \
             MYSQL_HOST=database-1.cqx46eeeqwnx.us-east-1.rds.amazonaws.com \
             MYSQL_PORT=3306 \
@@ -86,5 +76,6 @@ jobs:
             java -jar datastore-0.0.7.jar \
             --server.port=8084 \
             > /var/log/app/nohup.out 2>&1 &
-
-            echo "🚀 New Application Started on port 8084"
+      
+            disown
+            echo "🚀 Application deployed successfully"
