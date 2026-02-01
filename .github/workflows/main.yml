@@ -1,4 +1,4 @@
-name: Full CI/CD Pipeline (No Kill)
+name: Full CI/CD Pipeline
 
 on:
   push:
@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout source code
+      # 1️⃣ Checkout SCM
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -18,46 +18,59 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: "17"
-          distribution: "temurin"
+          distribution: temurin
+          cache: maven
 
-      # 3️⃣ Build Spring Boot JAR
+      # 3️⃣ Build JAR
       - name: Build JAR
-        run: mvn clean package -DskipTests
         working-directory: backend
+        run: mvn clean package -DskipTests
 
-      # 4️⃣ Upload JAR to EC2
-      - name: Upload JAR to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_KEY }}
-          source: "backend/target/datastore-0.0.7.jar"
-          target: "/home/ec2-user/app/"
-          overwrite: true
-
-      # 5️⃣ Run application ONLY if not running
-      - name: Run Application (No Kill)
+      # 4️⃣ Prepare EC2 directories
+      - name: Prepare EC2
         uses: appleboy/ssh-action@v1.1.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_KEY }}
           script: |
-            mkdir -p /home/ec2-user/app/logs
+            mkdir -p /home/ec2-user/app
+            mkdir -p /var/log/app
+            chmod -R 755 /home/ec2-user
+            chmod -R 755 /var/log/app
+            echo "EC2 ready"
+
+      # 5️⃣ Upload JAR
+      - name: Upload JAR to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_KEY }}
+          source: backend/target/datastore-0.0.7.jar
+          target: /home/ec2-user/app/
+          overwrite: true
+
+      # 6️⃣ Start Application (NO KILL)
+      - name: Start Application
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_KEY }}
+          script: |
             cd /home/ec2-user/app
 
-            if pgrep -f datastore-0.0.7.jar > /dev/null; then
-              echo "Application already running. Skipping start."
-            else
-              echo "Starting application..."
-              nohup env \
-                MYSQL_HOST=database-1.c30mwuq2mnrm.us-east-1.rds.amazonaws.com \
-                MYSQL_PORT=3306 \
-                MYSQL_DB=datastore \
-                MYSQL_USERNAME=admin \
-                MYSQL_PASSWORD=rajul464 \
-                java -jar datastore-0.0.7.jar \
-                --server.port=8084 \
-                > logs/nohup.out 2>&1 &
-            fi
+            nohup env \
+            MYSQL_HOST=database-1.c30mwuq2mnrm.us-east-1.rds.amazonaws.com \
+            MYSQL_PORT=3306 \
+            MYSQL_USERNAME=admin \
+            MYSQL_PASSWORD=rajul464 \
+            java -jar datastore-0.0.7.jar \
+            --server.port=8084 \
+            > /var/log/app/datastore.log 2>&1 &
+
+            sleep 5
+            echo "Running process:"
+            ps -ef | grep datastore | grep -v grep || true
+            echo "🚀 Application started"
