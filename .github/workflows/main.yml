@@ -1,4 +1,4 @@
-name: Full CI/CD Pipeline
+name: Full CI/CD Pipeline (No Kill)
 
 on:
   push:
@@ -36,27 +36,21 @@ jobs:
           target: "/home/ec2-user/app/"
           overwrite: true
 
-      # 5️⃣ Stop old application if running
-      - name: Stop Old App
+      # 5️⃣ Start application ONLY if not already running
+      - name: Run Application (No Kill)
         uses: appleboy/ssh-action@v1.1.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_KEY }}
           script: |
-            PID=$(pgrep -f datastore-0.0.7.jar || true)
-            if [ -n "$PID" ]; then
-              kill -9 $PID
+            echo "Checking if application is already running..."
+
+            if pgrep -f datastore-0.0.7.jar > /dev/null; then
+              echo "Application already running. Skipping start."
+              exit 0
             fi
 
-      # 6️⃣ Deploy & Run Application
-      - name: Run Application
-        uses: appleboy/ssh-action@v1.1.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_KEY }}
-          script: |
             mkdir -p /home/ec2-user/app/logs
             cd /home/ec2-user/app
 
@@ -71,4 +65,4 @@ jobs:
               --server.port=8084 \
               > logs/nohup.out 2>&1 &
 
-            echo "🚀 Application started"
+            echo "🚀 Application started successfully"
